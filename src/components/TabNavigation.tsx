@@ -1,52 +1,48 @@
 import type { ToolType } from "../types/types";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Scaling, Minimize2, ArrowRightLeft, FileCode } from "lucide-react";
+import {
+  Scaling,
+  Minimize2,
+  ArrowRightLeft,
+  SlidersHorizontal,
+  Wand2,
+} from "lucide-react";
 
 interface TabNavigationProps {
   activeTool: ToolType;
   onToolChange: (tool: ToolType) => void;
 }
 
+const tools: { value: ToolType; icon: React.ElementType; label: string }[] = [
+  { value: "resize", icon: Scaling, label: "Resize" },
+  { value: "compress", icon: Minimize2, label: "Compress" },
+  { value: "convert", icon: ArrowRightLeft, label: "Convert" },
+  { value: "transform", icon: SlidersHorizontal, label: "Transform" },
+  { value: "filter", icon: Wand2, label: "Filter" },
+];
+
 export default function TabNavigation({
   activeTool,
   onToolChange,
 }: TabNavigationProps) {
   return (
-    <div className="w-full max-w-2xl mx-auto mb-8 h-[4em]">
+    <div className="w-full mb-6">
       <Tabs
         value={activeTool}
         onValueChange={(val) => onToolChange(val as ToolType)}
         className="w-full"
       >
-        <TabsList className="grid w-full grid-cols-4 h-auto p-1 bg-transparent rounded-xl gap-2">
-          <TabsTrigger
-            value="resize"
-            className="flex flex-col gap-2 py-3 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-lg transition-all"
-          >
-            <Scaling className="size-5" />
-            <span className="text-xs font-medium">Resize</span>
-          </TabsTrigger>
-          <TabsTrigger
-            value="compress"
-            className="flex flex-col gap-2 py-3 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-lg transition-all"
-          >
-            <Minimize2 className="size-5" />
-            <span className="text-xs font-medium">Compress</span>
-          </TabsTrigger>
-          <TabsTrigger
-            value="convert"
-            className="flex flex-col gap-2 py-3 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-lg transition-all"
-          >
-            <ArrowRightLeft className="size-5" />
-            <span className="text-xs font-medium">Convert</span>
-          </TabsTrigger>
-          <TabsTrigger
-            value="base64"
-            className="flex flex-col gap-2 py-3 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-lg transition-all"
-          >
-            <FileCode className="size-5" />
-            <span className="text-xs font-medium">Base64</span>
-          </TabsTrigger>
+        <TabsList className="grid w-full grid-cols-5 h-auto p-1 bg-transparent rounded-xl gap-1">
+          {tools.map(({ value, icon: Icon, label }) => (
+            <TabsTrigger
+              key={value}
+              value={value}
+              className="flex flex-col gap-1 py-2 data-[state=active]:bg-background data-[state=active]:shadow-sm rounded-lg transition-all min-w-0"
+            >
+              <Icon className="size-4 shrink-0" />
+              <span className="text-[10px] font-medium truncate">{label}</span>
+            </TabsTrigger>
+          ))}
         </TabsList>
       </Tabs>
     </div>

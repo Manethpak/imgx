@@ -6,6 +6,9 @@ import type {
   ConvertOptions,
   ImageFormat,
   Base64Result,
+  PipelineOptions,
+  TransformOptions,
+  FilterOptions,
 } from "../types/types";
 
 /**
@@ -217,6 +220,208 @@ export async function encodeToBase64(
 }
 
 /**
+ * Convert a blob (e.g. from ProcessedImage) to ImageData for pipeline chaining
+ */
+export async function blobToImageData(
+  blob: Blob,
+  format: ImageFormat,
+  filename = "image"
+): Promise<ImageData> {
+  const ext = format.split("/")[1] || "png";
+  const file = new File([blob], `${filename}.${ext}`, { type: format });
+  return loadImage(file);
+}
+
+/**
+ * Run the full transformation pipeline: resize -> compress -> convert -> transform -> filter
+ */
+export async function runPipeline(
+  original: ImageData,
+  options: PipelineOptions
+): Promise<ProcessedImage> {
+  let current: ImageData | ProcessedImage = original;
+
+  current = await resizeImage(
+    "file" in current ? current : await blobToImageData(current.blob, current.format, "step"),
+    options.resize
+  );
+  current = await compressImage(
+    await blobToImageData(current.blob, current.format, "step"),
+    options.compress
+  );
+  current = await convertImage(
+    await blobToImageData(current.blob, current.format, "step"),
+    options.convert
+  );
+  current = await applyTransform(
+    await blobToImageData(current.blob, current.format, "step"),
+    options.transform
+  );
+  current = await applyFilter(
+    await blobToImageData(current.blob, current.format, "step"),
+    options.filter
+  );
+
+  return current;
+}
+
+async function applyRotate(
+  imageData: ImageData,
+  angle: number
+): Promise<ProcessedImage> {
+  const img = new Image();
+  img.src = imageData.url;
+  await new Promise((r) => {
+    img.onload = r;
+  });
+  const rad = (angle * Math.PI) / 180;
+  const cos = Math.abs(Math.cos(rad));
+  const sin = Math.abs(Math.sin(rad));
+  const w = Math.ceil(imageData.width * cos + imageData.height * sin);
+  const h = Math.ceil(imageData.width * sin + imageData.height * cos);
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Failed to get canvas context");
+  ctx.translate(w / 2, h / 2);
+  ctx.rotate(rad);
+  ctx.drawImage(img, -imageData.width / 2, -imageData.height / 2, imageData.width, imageData.height);
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("Failed to create blob"))),
+      imageData.format,
+      1.0
+    );
+  });
+  return { url: URL.createObjectURL(blob), width: w, height: h, size: blob.size, format: imageData.format, blob };
+}
+
+async function applyFlip(
+  imageData: ImageData,
+  horizontal: boolean,
+  vertical: boolean
+): Promise<ProcessedImage> {
+  const img = new Image();
+  img.src = imageData.url;
+  await new Promise((r) => {
+    img.onload = r;
+  });
+  const canvas = document.createElement("canvas");
+  canvas.width = imageData.width;
+  canvas.height = imageData.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Failed to get canvas context");
+  ctx.translate(horizontal ? imageData.width : 0, vertical ? imageData.height : 0);
+  ctx.scale(horizontal ? -1 : 1, vertical ? -1 : 1);
+  ctx.drawImage(img, 0, 0);
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("Failed to create blob"))),
+      imageData.format,
+      1.0
+    );
+  });
+  return { url: URL.createObjectURL(blob), width: imageData.width, height: imageData.height, size: blob.size, format: imageData.format, blob };
+}
+
+async function applySkew(
+  imageData: ImageData,
+  skewX: number,
+  skewY: number
+): Promise<ProcessedImage> {
+  const img = new Image();
+  img.src = imageData.url;
+  await new Promise((r) => {
+    img.onload = r;
+  });
+  const tanX = Math.tan((skewX * Math.PI) / 180);
+  const tanY = Math.tan((skewY * Math.PI) / 180);
+  const w = Math.ceil(imageData.width + Math.abs(imageData.height * tanX));
+  const h = Math.ceil(imageData.height + Math.abs(imageData.width * tanY));
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Failed to get canvas context");
+  ctx.setTransform(1, tanY, tanX, 1, 0, 0);
+  ctx.drawImage(img, 0, 0);
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("Failed to create blob"))),
+      imageData.format,
+      1.0
+    );
+  });
+  return { url: URL.createObjectURL(blob), width: w, height: h, size: blob.size, format: imageData.format, blob };
+}
+
+/** Combined rotate -> flip -> skew */
+async function applyTransform(
+  imageData: ImageData,
+  options: TransformOptions
+): Promise<ProcessedImage> {
+  let current = await applyRotate(imageData, options.angle);
+  let asImageData = await blobToImageData(current.blob, current.format, "t");
+  current = await applyFlip(asImageData, options.horizontal, options.vertical);
+  asImageData = await blobToImageData(current.blob, current.format, "t");
+  current = await applySkew(asImageData, options.skewX, options.skewY);
+  return current;
+}
+
+
+function buildFilterString(options: FilterOptions): string {
+  const parts: string[] = [];
+  if (options.brightness != null && options.brightness !== 1)
+    parts.push(`brightness(${options.brightness})`);
+  if (options.contrast != null && options.contrast !== 1)
+    parts.push(`contrast(${options.contrast})`);
+  if (options.grayscale != null && options.grayscale !== 0)
+    parts.push(`grayscale(${options.grayscale})`);
+  if (options.sepia != null && options.sepia !== 0)
+    parts.push(`sepia(${options.sepia})`);
+  if (options.invert != null && options.invert !== 0)
+    parts.push(`invert(${options.invert})`);
+  if (options.blur != null && options.blur > 0)
+    parts.push(`blur(${options.blur}px)`);
+  return parts.join(" ") || "none";
+}
+
+async function applyFilter(
+  imageData: ImageData,
+  options: FilterOptions
+): Promise<ProcessedImage> {
+  const img = new Image();
+  img.src = imageData.url;
+  await new Promise((r) => {
+    img.onload = r;
+  });
+  const canvas = document.createElement("canvas");
+  canvas.width = imageData.width;
+  canvas.height = imageData.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Failed to get canvas context");
+  ctx.globalAlpha = options.opacity ?? 1;
+  ctx.filter = buildFilterString(options);
+  ctx.drawImage(img, 0, 0);
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("Failed to create blob"))),
+      imageData.format,
+      1.0
+    );
+  });
+  return {
+    url: URL.createObjectURL(blob),
+    width: imageData.width,
+    height: imageData.height,
+    size: blob.size,
+    format: imageData.format,
+    blob,
+  };
+}
+
+/**
  * Decode base64 to image
  */
 export async function decodeFromBase64(
@@ -232,6 +437,18 @@ export async function decodeFromBase64(
   const file = new File([blob], "decoded-image.png", { type: blob.type });
 
   return loadImage(file);
+}
+
+/**
+ * Encode a blob to data URL (for Copy as base64 export)
+ */
+export function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
 }
 
 /**

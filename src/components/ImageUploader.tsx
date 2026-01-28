@@ -1,6 +1,6 @@
 import { useCallback, useState, useEffect } from "react";
 import type { ImageData } from "../types/types";
-import { loadImage } from "../utils/imageUtils";
+import { loadImage, decodeFromBase64 } from "../utils/imageUtils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Upload, X, FileImage } from "lucide-react";
@@ -81,13 +81,32 @@ export default function ImageUploader({
   );
 
   const handlePaste = useCallback(
-    (e: ClipboardEvent) => {
-      if (e.clipboardData && e.clipboardData.files.length > 0) {
+    async (e: ClipboardEvent) => {
+      if (!e.clipboardData) return;
+      if (e.clipboardData.files.length > 0) {
         const file = e.clipboardData.files[0];
         handleFile(file);
+        return;
+      }
+      const text = e.clipboardData.getData("text/plain")?.trim();
+      if (!text) return;
+      const dataUrlMatch = text.match(/^data:image\/[a-z+]+;base64,/i);
+      const looksLikeBase64 =
+        dataUrlMatch ||
+        (text.length > 100 && /^[A-Za-z0-9+/=]+$/.test(text.replace(/\s/g, "")));
+      if (!looksLikeBase64) return;
+      setError(null);
+      try {
+        const normalized = dataUrlMatch
+          ? text.replace(/\s/g, "")
+          : `data:image/png;base64,${text.replace(/\s/g, "")}`;
+        const imageData = await decodeFromBase64(normalized);
+        onImageLoad(imageData);
+      } catch {
+        setError("Invalid base64 image");
       }
     },
-    [handleFile]
+    [handleFile, onImageLoad]
   );
 
   useEffect(() => {
@@ -137,7 +156,8 @@ export default function ImageUploader({
               {isDragging ? "Drop your image here" : "Upload an image"}
             </h3>
             <p className="text-muted-foreground mb-8 max-w-md mx-auto text-base">
-              Drag and drop, paste from clipboard, or click to browse files
+              Drag and drop, paste from clipboard or a base64 image, or click to
+              browse files
             </p>
             <div className="flex flex-wrap justify-center gap-3 text-xs text-muted-foreground/70 font-medium uppercase tracking-wider">
               <span className="bg-muted/50 px-2 py-1 rounded-md">JPG</span>
