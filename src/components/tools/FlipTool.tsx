@@ -10,10 +10,7 @@ interface FlipToolProps {
   onProcess: (options: FlipOptions) => void;
 }
 
-export default function FlipTool({
-  imageData,
-  onProcess,
-}: FlipToolProps) {
+export default function FlipTool({ imageData, onProcess }: FlipToolProps) {
   const [horizontal, setHorizontal] = useState(false);
   const [vertical, setVertical] = useState(false);
 
@@ -24,9 +21,7 @@ export default function FlipTool({
   if (!imageData) {
     return (
       <div className="w-full max-w-2xl mx-auto text-center p-8">
-        <p className="text-muted-foreground">
-          Upload an image to flip
-        </p>
+        <p className="text-muted-foreground">Upload an image to flip</p>
       </div>
     );
   }
@@ -39,7 +34,9 @@ export default function FlipTool({
       </div>
       <div className="space-y-6">
         <div className="flex items-center justify-between p-4 bg-muted/30 rounded-xl border">
-          <Label htmlFor="flip-h" className="text-base">Flip horizontal</Label>
+          <Label htmlFor="flip-h" className="text-base">
+            Flip horizontal
+          </Label>
           <Switch
             id="flip-h"
             checked={horizontal}
@@ -47,7 +44,9 @@ export default function FlipTool({
           />
         </div>
         <div className="flex items-center justify-between p-4 bg-muted/30 rounded-xl border">
-          <Label htmlFor="flip-v" className="text-base">Flip vertical</Label>
+          <Label htmlFor="flip-v" className="text-base">
+            Flip vertical
+          </Label>
           <Switch
             id="flip-v"
             checked={vertical}

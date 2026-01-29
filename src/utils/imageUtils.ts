@@ -242,7 +242,7 @@ export async function runPipeline(
   let current: ImageData | ProcessedImage = original;
 
   current = await resizeImage(
-    "file" in current ? current : await blobToImageData(current.blob, current.format, "step"),
+    "file" in current ? current : await blobToImageData((current as ProcessedImage).blob, (current as ProcessedImage).format, "step"),
     options.resize
   );
   current = await compressImage(

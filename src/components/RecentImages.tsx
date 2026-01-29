@@ -119,17 +119,11 @@ export default function RecentImages({ onSelect }: RecentImagesProps) {
               className="group flex flex-col items-center rounded-lg border border-border/50 bg-muted/20 p-2 hover:bg-muted/50 hover:border-primary/30 transition-all text-left"
             >
               <div className="relative w-full aspect-square rounded-md overflow-hidden bg-muted/50 mb-2">
-                {loadingId === item.id ? (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                  </div>
-                ) : (
-                  <img
-                    src={item.thumbnailDataUrl || item.dataUrl}
-                    alt={item.name}
-                    className="w-full h-full object-contain"
-                  />
-                )}
+                <img
+                  src={item.thumbnailDataUrl || item.dataUrl}
+                  alt={item.name}
+                  className="w-full h-full object-contain"
+                />
               </div>
               <span className="text-xs font-medium truncate w-full">
                 {item.name}

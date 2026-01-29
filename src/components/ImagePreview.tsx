@@ -7,7 +7,8 @@ import {
 } from "../utils/imageUtils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Download, Loader2, Copy, Check } from "lucide-react";
+import { Download, Copy, Check } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface ImagePreviewProps {
   processed: ProcessedImage | null;
@@ -42,11 +43,11 @@ export default function ImagePreview({
 
   return (
     <Card className="w-full max-w-4xl mx-auto animate-fade-in border-border/50 shadow-xl shadow-primary/5 overflow-hidden">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 border-b bg-muted/30">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <CardTitle className="text-xl font-bold">Preview</CardTitle>
         {processed && (
           <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-muted-foreground bg-muted px-2.5 py-1 rounded-md border">
+            <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-1 rounded-md border">
               {formatFileSize(processed.size)}
             </span>
             <Button
@@ -81,21 +82,15 @@ export default function ImagePreview({
 
       <CardContent className="p-6">
         <div className="relative rounded-xl overflow-hidden bg-muted/30 border-2 border-primary/20 flex items-center justify-center min-h-[300px] shadow-inner">
-          {isProcessing ? (
-            <div className="w-full min-h-[300px] flex items-center justify-center bg-background/50 backdrop-blur-sm z-20">
-              <div className="flex flex-col items-center gap-4">
-                <Loader2 className="w-10 h-10 text-primary animate-spin" />
-                <p className="text-sm font-medium text-muted-foreground">
-                  Updating...
-                </p>
-              </div>
-            </div>
-          ) : processed ? (
+          {processed ? (
             <>
               <img
                 src={processed.url}
                 alt="Result"
-                className="w-full h-auto max-h-[500px] object-contain relative z-10"
+                className={cn(
+                  "w-full h-auto max-h-[500px] object-contain relative z-10",
+                  isProcessing && "opacity-50"
+                )}
               />
               <div className="absolute bottom-2 left-2 right-2 bg-black/70 p-2 rounded-lg backdrop-blur-md opacity-0 hover:opacity-100 transition-opacity z-20">
                 <p className="text-xs text-white font-medium text-center">

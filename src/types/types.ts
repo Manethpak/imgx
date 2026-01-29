@@ -69,6 +69,24 @@ export interface FilterOptions {
   blur?: number; // px
 }
 
+export interface FlipOptions {
+  horizontal: boolean;
+  vertical: boolean;
+}
+
+export interface OpacityOptions {
+  opacity: number; // 0-1
+}
+
+export interface RotateOptions {
+  angle: number; // degrees
+}
+
+export interface SkewOptions {
+  skewX: number; // degrees
+  skewY: number; // degrees
+}
+
 /** Pipeline options: one set per stage, applied in order */
 export interface PipelineOptions {
   resize: ResizeOptions;
