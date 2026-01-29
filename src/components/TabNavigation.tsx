@@ -6,6 +6,7 @@ import {
   ArrowRightLeft,
   SlidersHorizontal,
   Wand2,
+  Crop,
 } from "lucide-react";
 
 interface TabNavigationProps {
@@ -14,6 +15,7 @@ interface TabNavigationProps {
 }
 
 const tools: { value: ToolType; icon: React.ElementType; label: string }[] = [
+  { value: "crop", icon: Crop, label: "Crop" },
   { value: "resize", icon: Scaling, label: "Resize" },
   { value: "compress", icon: Minimize2, label: "Compress" },
   { value: "convert", icon: ArrowRightLeft, label: "Convert" },
@@ -32,7 +34,7 @@ export default function TabNavigation({
         onValueChange={(val) => onToolChange(val as ToolType)}
         className="w-full"
       >
-        <TabsList className="grid w-full grid-cols-5 h-auto p-1 bg-transparent rounded-xl gap-1">
+        <TabsList className="grid w-full grid-cols-3 md:grid-cols-6 h-auto p-1 bg-transparent rounded-xl gap-1">
           {tools.map(({ value, icon: Icon, label }) => (
             <TabsTrigger
               key={value}

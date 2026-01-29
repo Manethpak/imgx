@@ -8,6 +8,7 @@ import CompressTool from "./tools/CompressTool";
 import ConvertTool from "./tools/ConvertTool";
 import TransformTool from "./tools/TransformTool";
 import FilterTool from "./tools/FilterTool";
+import CropTool from "./tools/CropTool";
 import { runPipeline } from "../utils/imageUtils";
 import { addRecentImage } from "../utils/recentImages";
 import type {
@@ -18,12 +19,19 @@ import type {
   ConvertOptions,
   TransformOptions,
   FilterOptions,
+  CropOptions,
   PipelineOptions,
   ToolType,
 } from "../types/types";
 
 function defaultPipelineOptions(image: ImageData): PipelineOptions {
   return {
+    crop: {
+      x: 0,
+      y: 0,
+      width: image.width,
+      height: image.height,
+    },
     resize: {
       width: image.width,
       height: image.height,
@@ -53,10 +61,12 @@ function defaultPipelineOptions(image: ImageData): PipelineOptions {
 const DEBOUNCE_MS = 150;
 
 export default function ImageTransform() {
-  const [activeTool, setActiveTool] = useState<ToolType>("resize");
+  const [activeTool, setActiveTool] = useState<ToolType>("crop");
   const [originalImage, setOriginalImage] = useState<ImageData | null>(null);
   const [options, setOptions] = useState<PipelineOptions | null>(null);
-  const [pipelineResult, setPipelineResult] = useState<ProcessedImage | null>(null);
+  const [pipelineResult, setPipelineResult] = useState<ProcessedImage | null>(
+    null,
+  );
   const [isPipelineRunning, setIsPipelineRunning] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cancelledRef = useRef(false);
@@ -111,6 +121,27 @@ export default function ImageTransform() {
   const setFilterOptions = useCallback((filter: FilterOptions) => {
     setOptions((o) => (o ? { ...o, filter } : null));
   }, []);
+  const setCropOptions = useCallback((crop: CropOptions) => {
+    setOptions((o) => (o ? { ...o, crop } : null));
+  }, []);
+
+  const handleResetCrop = useCallback(() => {
+    if (originalImage) {
+      setOptions((o) =>
+        o
+          ? {
+              ...o,
+              crop: {
+                x: 0,
+                y: 0,
+                width: originalImage.width,
+                height: originalImage.height,
+              },
+            }
+          : null,
+      );
+    }
+  }, [originalImage]);
 
   const handleResetResize = useCallback(() => {
     if (originalImage) {
@@ -124,7 +155,7 @@ export default function ImageTransform() {
                 maintainAspectRatio: true,
               },
             }
-          : null
+          : null,
       );
     }
   }, [originalImage]);
@@ -134,7 +165,7 @@ export default function ImageTransform() {
   const handleResetConvert = useCallback(() => {
     if (originalImage) {
       setOptions((o) =>
-        o ? { ...o, convert: { format: originalImage.format } } : null
+        o ? { ...o, convert: { format: originalImage.format } } : null,
       );
     }
   }, [originalImage]);
@@ -151,7 +182,7 @@ export default function ImageTransform() {
               skewY: 0,
             },
           }
-        : null
+        : null,
     );
   }, []);
   const handleResetFilter = useCallback(() => {
@@ -169,7 +200,7 @@ export default function ImageTransform() {
               blur: 0,
             },
           }
-        : null
+        : null,
     );
   }, []);
 
@@ -197,13 +228,14 @@ export default function ImageTransform() {
               currentImage={originalImage}
               onImageLoad={handleImageLoad}
             />
-            {!originalImage && (
-              <RecentImages onSelect={handleImageLoad} />
-            )}
+            {!originalImage && <RecentImages onSelect={handleImageLoad} />}
 
             {originalImage && options && (
               <>
-                <TabNavigation activeTool={activeTool} onToolChange={setActiveTool} />
+                <TabNavigation
+                  activeTool={activeTool}
+                  onToolChange={setActiveTool}
+                />
 
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 bg-card border rounded-2xl p-6 shadow-sm">
                   {activeTool === "resize" && (
@@ -244,6 +276,14 @@ export default function ImageTransform() {
                       options={options.filter}
                       onOptionsChange={setFilterOptions}
                       onReset={handleResetFilter}
+                    />
+                  )}
+                  {activeTool === "crop" && (
+                    <CropTool
+                      imageData={originalImage}
+                      options={options.crop}
+                      onOptionsChange={setCropOptions}
+                      onReset={handleResetCrop}
                     />
                   )}
                 </div>

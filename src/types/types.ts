@@ -37,12 +37,20 @@ export interface ConvertOptions {
   quality?: number;
 }
 
+export interface CropOptions {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export type ToolType =
   | "resize"
   | "compress"
   | "convert"
   | "transform"
-  | "filter";
+  | "filter"
+  | "crop";
 
 export interface Base64Result {
   dataUrl: string;
@@ -89,6 +97,7 @@ export interface SkewOptions {
 
 /** Pipeline options: one set per stage, applied in order */
 export interface PipelineOptions {
+  crop: CropOptions;
   resize: ResizeOptions;
   compress: CompressOptions;
   convert: ConvertOptions;

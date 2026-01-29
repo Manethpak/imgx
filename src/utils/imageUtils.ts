@@ -9,6 +9,7 @@ import type {
   PipelineOptions,
   TransformOptions,
   FilterOptions,
+  CropOptions,
 } from "../types/types";
 
 /**
@@ -44,7 +45,7 @@ export async function loadImage(file: File): Promise<ImageData> {
  */
 export async function resizeImage(
   imageData: ImageData,
-  options: ResizeOptions
+  options: ResizeOptions,
 ): Promise<ProcessedImage> {
   const img = new Image();
   img.src = imageData.url;
@@ -87,7 +88,7 @@ export async function resizeImage(
     canvas.toBlob(
       (b) => (b ? resolve(b) : reject(new Error("Failed to create blob"))),
       imageData.format,
-      1.0
+      1.0,
     );
   });
 
@@ -106,7 +107,7 @@ export async function resizeImage(
  */
 export async function compressImage(
   imageData: ImageData,
-  options: CompressOptions
+  options: CompressOptions,
 ): Promise<ProcessedImage> {
   const img = new Image();
   img.src = imageData.url;
@@ -132,7 +133,7 @@ export async function compressImage(
     canvas.toBlob(
       (b) => (b ? resolve(b) : reject(new Error("Failed to create blob"))),
       format,
-      quality
+      quality,
     );
   });
 
@@ -151,7 +152,7 @@ export async function compressImage(
  */
 export async function convertImage(
   imageData: ImageData,
-  options: ConvertOptions
+  options: ConvertOptions,
 ): Promise<ProcessedImage> {
   const img = new Image();
   img.src = imageData.url;
@@ -180,7 +181,7 @@ export async function convertImage(
     canvas.toBlob(
       (b) => (b ? resolve(b) : reject(new Error("Failed to create blob"))),
       options.format,
-      quality
+      quality,
     );
   });
 
@@ -198,7 +199,7 @@ export async function convertImage(
  * Encode an image to base64
  */
 export async function encodeToBase64(
-  imageData: ImageData
+  imageData: ImageData,
 ): Promise<Base64Result> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -225,7 +226,7 @@ export async function encodeToBase64(
 export async function blobToImageData(
   blob: Blob,
   format: ImageFormat,
-  filename = "image"
+  filename = "image",
 ): Promise<ImageData> {
   const ext = format.split("/")[1] || "png";
   const file = new File([blob], `${filename}.${ext}`, { type: format });
@@ -233,41 +234,121 @@ export async function blobToImageData(
 }
 
 /**
- * Run the full transformation pipeline: resize -> compress -> convert -> transform -> filter
+ * Run the full transformation pipeline: crop -> resize -> compress -> convert -> transform -> filter
  */
 export async function runPipeline(
   original: ImageData,
-  options: PipelineOptions
+  options: PipelineOptions,
 ): Promise<ProcessedImage> {
   let current: ImageData | ProcessedImage = original;
 
+  current = await cropImage(
+    "file" in current
+      ? current
+      : await blobToImageData(
+          (current as ProcessedImage).blob,
+          (current as ProcessedImage).format,
+          "step",
+        ),
+    options.crop,
+  );
   current = await resizeImage(
-    "file" in current ? current : await blobToImageData((current as ProcessedImage).blob, (current as ProcessedImage).format, "step"),
-    options.resize
+    await blobToImageData(current.blob, current.format, "step"),
+    options.resize,
   );
   current = await compressImage(
     await blobToImageData(current.blob, current.format, "step"),
-    options.compress
+    options.compress,
   );
   current = await convertImage(
     await blobToImageData(current.blob, current.format, "step"),
-    options.convert
+    options.convert,
   );
   current = await applyTransform(
     await blobToImageData(current.blob, current.format, "step"),
-    options.transform
+    options.transform,
   );
   current = await applyFilter(
     await blobToImageData(current.blob, current.format, "step"),
-    options.filter
+    options.filter,
   );
 
   return current;
 }
 
+/**
+ * Crop an image to specified dimensions
+ */
+export async function cropImage(
+  imageData: ImageData,
+  options: CropOptions,
+): Promise<ProcessedImage> {
+  // If crop dimensions match original dimensions and x/y are 0, skip cropping
+  if (
+    options.x === 0 &&
+    options.y === 0 &&
+    options.width === imageData.width &&
+    options.height === imageData.height
+  ) {
+    const response = await fetch(imageData.url);
+    const blob = await response.blob();
+    return {
+      url: imageData.url,
+      width: imageData.width,
+      height: imageData.height,
+      size: imageData.size,
+      format: imageData.format,
+      blob,
+    };
+  }
+
+  const img = new Image();
+  img.src = imageData.url;
+
+  await new Promise((resolve) => {
+    img.onload = resolve;
+  });
+
+  const canvas = document.createElement("canvas");
+  canvas.width = options.width;
+  canvas.height = options.height;
+
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Failed to get canvas context");
+
+  ctx.drawImage(
+    img,
+    options.x,
+    options.y,
+    options.width,
+    options.height,
+    0,
+    0,
+    options.width,
+    options.height,
+  );
+
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("Failed to create blob"))),
+      imageData.format,
+      1.0,
+    );
+  });
+
+  return {
+    url: URL.createObjectURL(blob),
+    width: options.width,
+    height: options.height,
+    size: blob.size,
+    format: imageData.format,
+    blob,
+  };
+}
+
 async function applyRotate(
   imageData: ImageData,
-  angle: number
+  angle: number,
 ): Promise<ProcessedImage> {
   const img = new Image();
   img.src = imageData.url;
@@ -286,21 +367,34 @@ async function applyRotate(
   if (!ctx) throw new Error("Failed to get canvas context");
   ctx.translate(w / 2, h / 2);
   ctx.rotate(rad);
-  ctx.drawImage(img, -imageData.width / 2, -imageData.height / 2, imageData.width, imageData.height);
+  ctx.drawImage(
+    img,
+    -imageData.width / 2,
+    -imageData.height / 2,
+    imageData.width,
+    imageData.height,
+  );
   const blob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
       (b) => (b ? resolve(b) : reject(new Error("Failed to create blob"))),
       imageData.format,
-      1.0
+      1.0,
     );
   });
-  return { url: URL.createObjectURL(blob), width: w, height: h, size: blob.size, format: imageData.format, blob };
+  return {
+    url: URL.createObjectURL(blob),
+    width: w,
+    height: h,
+    size: blob.size,
+    format: imageData.format,
+    blob,
+  };
 }
 
 async function applyFlip(
   imageData: ImageData,
   horizontal: boolean,
-  vertical: boolean
+  vertical: boolean,
 ): Promise<ProcessedImage> {
   const img = new Image();
   img.src = imageData.url;
@@ -312,23 +406,33 @@ async function applyFlip(
   canvas.height = imageData.height;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Failed to get canvas context");
-  ctx.translate(horizontal ? imageData.width : 0, vertical ? imageData.height : 0);
+  ctx.translate(
+    horizontal ? imageData.width : 0,
+    vertical ? imageData.height : 0,
+  );
   ctx.scale(horizontal ? -1 : 1, vertical ? -1 : 1);
   ctx.drawImage(img, 0, 0);
   const blob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
       (b) => (b ? resolve(b) : reject(new Error("Failed to create blob"))),
       imageData.format,
-      1.0
+      1.0,
     );
   });
-  return { url: URL.createObjectURL(blob), width: imageData.width, height: imageData.height, size: blob.size, format: imageData.format, blob };
+  return {
+    url: URL.createObjectURL(blob),
+    width: imageData.width,
+    height: imageData.height,
+    size: blob.size,
+    format: imageData.format,
+    blob,
+  };
 }
 
 async function applySkew(
   imageData: ImageData,
   skewX: number,
-  skewY: number
+  skewY: number,
 ): Promise<ProcessedImage> {
   const img = new Image();
   img.src = imageData.url;
@@ -350,16 +454,23 @@ async function applySkew(
     canvas.toBlob(
       (b) => (b ? resolve(b) : reject(new Error("Failed to create blob"))),
       imageData.format,
-      1.0
+      1.0,
     );
   });
-  return { url: URL.createObjectURL(blob), width: w, height: h, size: blob.size, format: imageData.format, blob };
+  return {
+    url: URL.createObjectURL(blob),
+    width: w,
+    height: h,
+    size: blob.size,
+    format: imageData.format,
+    blob,
+  };
 }
 
 /** Combined rotate -> flip -> skew */
 async function applyTransform(
   imageData: ImageData,
-  options: TransformOptions
+  options: TransformOptions,
 ): Promise<ProcessedImage> {
   let current = await applyRotate(imageData, options.angle);
   let asImageData = await blobToImageData(current.blob, current.format, "t");
@@ -368,7 +479,6 @@ async function applyTransform(
   current = await applySkew(asImageData, options.skewX, options.skewY);
   return current;
 }
-
 
 function buildFilterString(options: FilterOptions): string {
   const parts: string[] = [];
@@ -389,7 +499,7 @@ function buildFilterString(options: FilterOptions): string {
 
 async function applyFilter(
   imageData: ImageData,
-  options: FilterOptions
+  options: FilterOptions,
 ): Promise<ProcessedImage> {
   const img = new Image();
   img.src = imageData.url;
@@ -408,7 +518,7 @@ async function applyFilter(
     canvas.toBlob(
       (b) => (b ? resolve(b) : reject(new Error("Failed to create blob"))),
       imageData.format,
-      1.0
+      1.0,
     );
   });
   return {
@@ -425,7 +535,7 @@ async function applyFilter(
  * Decode base64 to image
  */
 export async function decodeFromBase64(
-  base64String: string
+  base64String: string,
 ): Promise<ImageData> {
   // Add data URL prefix if not present
   const dataUrl = base64String.startsWith("data:")
@@ -483,7 +593,7 @@ export function formatFileSize(bytes: number): string {
  */
 export function calculateCompressionRatio(
   originalSize: number,
-  compressedSize: number
+  compressedSize: number,
 ): number {
   return Math.round(((originalSize - compressedSize) / originalSize) * 100);
 }
