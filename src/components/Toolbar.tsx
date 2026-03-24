@@ -2,6 +2,8 @@ import { useState } from 'react'
 import type { EditorOptions, ImportedImage } from '../types/image'
 import { formatBytes } from '../lib/image/load'
 
+type ActivePanel = 'resize' | 'crop' | null
+
 type ToolbarProps = {
   image: ImportedImage
   options: EditorOptions
@@ -10,9 +12,9 @@ type ToolbarProps = {
   onExport: () => void
   onNewImage: () => void
   isProcessing: boolean
+  activePanel: ActivePanel
+  onActivePanelChange: (panel: ActivePanel) => void
 }
-
-type ActivePanel = 'resize' | 'crop' | null
 
 export function Toolbar({
   image,
@@ -22,11 +24,15 @@ export function Toolbar({
   onExport,
   onNewImage,
   isProcessing,
+  activePanel,
+  onActivePanelChange,
 }: ToolbarProps) {
-  const [activePanel, setActivePanel] = useState<ActivePanel>(null)
+  const [draftQuality, setDraftQuality] = useState<number | null>(null)
 
-  function togglePanel(panel: ActivePanel) {
-    setActivePanel((current) => (current === panel ? null : panel))
+  const displayQuality = draftQuality ?? options.output.quality
+
+  function togglePanel(panel: NonNullable<ActivePanel>) {
+    onActivePanelChange(activePanel === panel ? null : panel)
   }
 
   function cycleRotation() {
@@ -126,14 +132,19 @@ export function Toolbar({
         <div className="toolbar-quality">
           <label className="toolbar-quality__label">
             Quality
-            <span className="toolbar-quality__value">{options.output.quality}%</span>
+            <span className="toolbar-quality__value">{displayQuality}%</span>
           </label>
           <input
             type="range"
             min="1"
             max="100"
-            value={options.output.quality}
-            onChange={(e) => onChange({ ...options, output: { ...options.output, quality: Number(e.target.value) } })}
+            value={displayQuality}
+            onChange={(e) => setDraftQuality(Number(e.target.value))}
+            onPointerUp={(e) => {
+              const value = Number((e.target as HTMLInputElement).value)
+              setDraftQuality(null)
+              onChange({ ...options, output: { ...options.output, quality: value } })
+            }}
             className="toolbar-quality__slider"
           />
         </div>
@@ -204,25 +215,7 @@ export function Toolbar({
             />
             <span>Enable crop</span>
           </label>
-
-          <div className="toolbar-panel__fields">
-            {(['x', 'y', 'width', 'height'] as const).map((field) => (
-              <label className="field-compact" key={field}>
-                <span>{field === 'width' ? 'W' : field === 'height' ? 'H' : field.toUpperCase()}</span>
-                <input
-                  type="number"
-                  min="0"
-                  value={options.crop[field]}
-                  onChange={(e) =>
-                    onChange({
-                      ...options,
-                      crop: { ...options.crop, [field]: Math.max(0, Number(e.target.value) || 0) },
-                    })
-                  }
-                />
-              </label>
-            ))}
-          </div>
+          <span className="toolbar-panel__hint">Drag handles on the preview to set the crop region.</span>
         </div>
       )}
     </div>

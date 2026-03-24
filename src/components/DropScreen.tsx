@@ -11,6 +11,7 @@ export function DropScreen({ isImporting, onFile, onBase64 }: DropScreenProps) {
   const [showBase64, setShowBase64] = useState(false)
   const [base64Value, setBase64Value] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const droppedRef = useRef(false)
 
   // Focus textarea when shown
   useEffect(() => {
@@ -23,10 +24,19 @@ export function DropScreen({ isImporting, onFile, onBase64 }: DropScreenProps) {
     e.preventDefault()
     setIsDragging(false)
     const file = e.dataTransfer.files?.[0]
-    if (file) onFile(file)
+    if (file) {
+      droppedRef.current = true
+      onFile(file)
+    }
   }
 
   function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
+    // Skip if this change was triggered by a drag-drop (label already handled it)
+    if (droppedRef.current) {
+      droppedRef.current = false
+      e.target.value = ''
+      return
+    }
     const file = e.target.files?.[0]
     if (file) onFile(file)
     e.target.value = ''
