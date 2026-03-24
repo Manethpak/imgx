@@ -1,12 +1,26 @@
 import { type ChangeEvent, type DragEvent, useEffect, useRef, useState } from 'react'
+import type { RecentEntry } from '../types/image'
+import { RecentsList } from './RecentsList'
 
 type DropScreenProps = {
   isImporting: boolean
   onFile: (file: File) => void
   onBase64: (raw: string) => void
+  recents: RecentEntry[]
+  onOpenRecent: (entry: RecentEntry) => void
+  onRemoveRecent: (id: string) => void
+  onClearRecents: () => void
 }
 
-export function DropScreen({ isImporting, onFile, onBase64 }: DropScreenProps) {
+export function DropScreen({
+  isImporting,
+  onFile,
+  onBase64,
+  recents,
+  onOpenRecent,
+  onRemoveRecent,
+  onClearRecents,
+}: DropScreenProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [showBase64, setShowBase64] = useState(false)
   const [base64Value, setBase64Value] = useState('')
@@ -109,6 +123,13 @@ export function DropScreen({ isImporting, onFile, onBase64 }: DropScreenProps) {
             </button>
           </div>
         )}
+
+        <RecentsList
+          entries={recents}
+          onOpen={onOpenRecent}
+          onRemove={onRemoveRecent}
+          onClearAll={onClearRecents}
+        />
       </div>
     </div>
   )

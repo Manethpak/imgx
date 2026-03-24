@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { EditorOptions, ImportedImage } from '../types/image'
 import { formatBytes } from '../lib/image/load'
+import { DEFAULT_COLOR } from '../lib/image/process'
 
 type ActivePanel = 'resize' | 'crop' | null
 
@@ -14,6 +15,8 @@ type ToolbarProps = {
   isProcessing: boolean
   activePanel: ActivePanel
   onActivePanelChange: (panel: ActivePanel) => void
+  colorPanelOpen: boolean
+  onToggleColorPanel: () => void
 }
 
 export function Toolbar({
@@ -26,10 +29,16 @@ export function Toolbar({
   isProcessing,
   activePanel,
   onActivePanelChange,
+  colorPanelOpen,
+  onToggleColorPanel,
 }: ToolbarProps) {
   const [draftQuality, setDraftQuality] = useState<number | null>(null)
 
   const displayQuality = draftQuality ?? options.output.quality
+
+  // Check if any color adjustment is non-default
+  const colorActive = (Object.keys(DEFAULT_COLOR) as (keyof typeof DEFAULT_COLOR)[])
+    .some(k => options.color[k] !== DEFAULT_COLOR[k])
 
   function togglePanel(panel: NonNullable<ActivePanel>) {
     onActivePanelChange(activePanel === panel ? null : panel)
@@ -46,7 +55,7 @@ export function Toolbar({
       <div className="toolbar__info">
         <span className="toolbar__filename" title={image.file.name}>{image.file.name}</span>
         <span className="toolbar__meta">
-          {image.width}x{image.height} &middot; {formatBytes(image.size)} &middot; {image.type.replace('image/', '').toUpperCase()}
+          {image.width}×{image.height} &middot; {formatBytes(image.size)} &middot; {image.type.replace('image/', '').toUpperCase()}
         </span>
       </div>
 
@@ -126,6 +135,24 @@ export function Toolbar({
           <span>Crop</span>
         </button>
 
+        {/* Colors — opens floating panel */}
+        <button
+          type="button"
+          className={`toolbar-btn ${colorPanelOpen || colorActive ? 'toolbar-btn--active' : ''}`}
+          onClick={onToggleColorPanel}
+          title="Color adjustments"
+        >
+          {/* palette icon */}
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="13.5" cy="6.5" r="2.5" />
+            <circle cx="19" cy="13" r="2.5" />
+            <circle cx="6.5" cy="15.5" r="2.5" />
+            <path d="M17.5 8.5c-2 3.5-5.5 5.5-11 6" />
+          </svg>
+          <span>Colors</span>
+          {colorActive && <span className="toolbar-btn__dot" />}
+        </button>
+
         <div className="toolbar__sep" />
 
         {/* Quality */}
@@ -164,15 +191,6 @@ export function Toolbar({
       {/* Expandable panels */}
       {activePanel === 'resize' && (
         <div className="toolbar-panel slide-down">
-          <label className="toggle-inline">
-            <input
-              type="checkbox"
-              checked={options.resize.enabled}
-              onChange={(e) => onChange({ ...options, resize: { ...options.resize, enabled: e.target.checked } })}
-            />
-            <span>Enable resize</span>
-          </label>
-
           <div className="toolbar-panel__fields">
             <label className="field-compact">
               <span>W</span>
@@ -202,20 +220,35 @@ export function Toolbar({
             />
             <span>Lock aspect ratio</span>
           </label>
+
+          <button
+            type="button"
+            className="btn btn--ghost btn--xs"
+            onClick={() => onChange({
+              ...options,
+              resize: { width: image.width, height: image.height, keepAspectRatio: true },
+            })}
+            title="Reset resize to original dimensions"
+          >
+            Reset
+          </button>
         </div>
       )}
 
       {activePanel === 'crop' && (
         <div className="toolbar-panel slide-down">
-          <label className="toggle-inline">
-            <input
-              type="checkbox"
-              checked={options.crop.enabled}
-              onChange={(e) => onChange({ ...options, crop: { ...options.crop, enabled: e.target.checked } })}
-            />
-            <span>Enable crop</span>
-          </label>
           <span className="toolbar-panel__hint">Drag handles on the preview to set the crop region.</span>
+          <button
+            type="button"
+            className="btn btn--ghost btn--xs"
+            onClick={() => onChange({
+              ...options,
+              crop: { x: 0, y: 0, width: image.width, height: image.height },
+            })}
+            title="Reset crop to full image"
+          >
+            Reset
+          </button>
         </div>
       )}
     </div>

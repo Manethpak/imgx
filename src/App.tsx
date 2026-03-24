@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type DragEvent } from "react";
 import "./App.css";
+import { ColorPanel } from "./components/ColorPanel";
 import { DropScreen } from "./components/DropScreen";
 import { ExportDialog } from "./components/ExportDialog";
 import { Footer } from "./components/Footer";
@@ -17,10 +18,18 @@ import {
   processImage,
   updateOptionsForImage,
 } from "./lib/image/process";
+import {
+  addRecent,
+  buildRecentEntry,
+  clearRecents,
+  loadRecents,
+  removeRecent,
+} from "./lib/image/recents";
 import type {
   EditorOptions,
   ImportedImage,
   ProcessedImage,
+  RecentEntry,
 } from "./types/image";
 
 function App() {
@@ -36,6 +45,26 @@ function App() {
   const [activePanel, setActivePanel] = useState<"resize" | "crop" | null>(
     null,
   );
+  const [colorPanelOpen, setColorPanelOpen] = useState(false);
+  const [recents, setRecents] = useState<RecentEntry[]>([]);
+
+  // Load recents from IndexedDB on mount
+  useEffect(() => {
+    loadRecents()
+      .then(setRecents)
+      .catch(() => {/* IDB unavailable, silently skip */})
+  }, []);
+
+  // Persist a newly imported image to recents
+  const saveToRecents = useCallback(async (imported: ImportedImage) => {
+    try {
+      const entry = await buildRecentEntry(imported.file, imported.width, imported.height);
+      await addRecent(entry);
+      setRecents(await loadRecents());
+    } catch {
+      // Non-fatal — recents are a convenience feature
+    }
+  }, []);
 
   // Import file
   const importFile = useCallback(async (file: File) => {
@@ -47,6 +76,7 @@ function App() {
         return next;
       });
       setOptions((prev) => updateOptionsForImage(next, prev));
+      void saveToRecents(next);
     } catch (err) {
       setToast(
         err instanceof Error ? err.message : "Could not load that image.",
@@ -54,7 +84,7 @@ function App() {
     } finally {
       setIsImporting(false);
     }
-  }, []);
+  }, [saveToRecents]);
 
   // Import base64
   const importBase64 = useCallback(async (raw: string) => {
@@ -66,11 +96,33 @@ function App() {
         return next;
       });
       setOptions((prev) => updateOptionsForImage(next, prev));
+      void saveToRecents(next);
     } catch (err) {
       setToast(err instanceof Error ? err.message : "Could not decode base64.");
     } finally {
       setIsImporting(false);
     }
+  }, [saveToRecents]);
+
+  // Re-open an image from the recents list
+  const openRecent = useCallback(async (entry: RecentEntry) => {
+    await importFile(entry.blob as File);
+  }, [importFile]);
+
+  // Remove one recent entry
+  const handleRemoveRecent = useCallback(async (id: string) => {
+    try {
+      await removeRecent(id);
+      setRecents((prev) => prev.filter((e) => e.id !== id));
+    } catch {/* ignore */}
+  }, []);
+
+  // Clear all recents
+  const handleClearRecents = useCallback(async () => {
+    try {
+      await clearRecents();
+      setRecents([]);
+    } catch {/* ignore */}
   }, []);
 
   // Clipboard paste — works on both screens
@@ -185,10 +237,8 @@ function App() {
     setOptions(createDefaultOptions());
     setShowExport(false);
     setActivePanel(null);
+    setColorPanelOpen(false);
   }
-
-  // File input handler for toolbar "New" re-import
-  void 0; // placeholder
 
   // Derive base name for export
   const baseName = image?.file.name.replace(/\.[^.]+$/, "") ?? "image";
@@ -203,6 +253,10 @@ function App() {
             isImporting={isImporting}
             onFile={(f) => void importFile(f)}
             onBase64={(s) => void importBase64(s)}
+            recents={recents}
+            onOpenRecent={(entry) => void openRecent(entry)}
+            onRemoveRecent={(id) => void handleRemoveRecent(id)}
+            onClearRecents={() => void handleClearRecents()}
           />
         ) : (
           <div className="editor fade-in">
@@ -216,6 +270,8 @@ function App() {
               isProcessing={isProcessing}
               activePanel={activePanel}
               onActivePanelChange={setActivePanel}
+              colorPanelOpen={colorPanelOpen}
+              onToggleColorPanel={() => setColorPanelOpen((v) => !v)}
             />
             <Preview
               image={image}
@@ -227,6 +283,13 @@ function App() {
                 setOptions((cur) => ({ ...cur, crop: next }))
               }
             />
+            {colorPanelOpen && (
+              <ColorPanel
+                color={options.color}
+                onChange={(next) => setOptions((cur) => ({ ...cur, color: next }))}
+                onClose={() => setColorPanelOpen(false)}
+              />
+            )}
           </div>
         )}
       </main>

@@ -33,15 +33,25 @@ export type ImageInputError = {
   message: string
 }
 
+/** A single entry in the recents list stored in IndexedDB. */
+export type RecentEntry = {
+  id: string
+  name: string
+  type: SupportedMimeType
+  size: number
+  width: number
+  height: number
+  addedAt: number   // Unix ms timestamp
+  blob: Blob        // The original file blob — stored natively in IDB
+}
+
 export type ResizeOptions = {
-  enabled: boolean
   width: number
   height: number
   keepAspectRatio: boolean
 }
 
 export type CropOptions = {
-  enabled: boolean
   x: number
   y: number
   width: number
@@ -54,6 +64,26 @@ export type TransformOptions = {
   flipVertical: boolean
 }
 
+export type ColorOptions = {
+  // ctx.filter-based adjustments
+  brightness: number      // -100 to 100  (0 = neutral)
+  contrast: number        // -100 to 100  (0 = neutral)
+  saturation: number      // -100 to 100  (0 = neutral)
+  hueRotate: number       // 0 to 360 deg
+  blur: number            // 0 to 20 px
+  grayscale: number       // 0 to 100 %
+  sepia: number           // 0 to 100 %
+  invert: boolean
+  // Simulated via ctx.filter
+  temperature: number     // -100 (cool/blue) to 100 (warm/orange)
+  tint: number            // -100 (green) to 100 (magenta)
+  exposure: number        // -100 to 100  (multiplicative brightness)
+  // Pixel-manipulation effects
+  vignette: number        // 0 to 100
+  noise: number           // 0 to 100
+  sharpen: number         // 0 to 100
+}
+
 export type OutputOptions = {
   format: SupportedMimeType
   quality: number
@@ -63,5 +93,6 @@ export type EditorOptions = {
   resize: ResizeOptions
   crop: CropOptions
   transform: TransformOptions
+  color: ColorOptions
   output: OutputOptions
 }
