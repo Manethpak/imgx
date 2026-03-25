@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { RecentEntry } from '../types/image'
 import { formatBytes } from '../lib/image/load'
 
@@ -9,37 +9,19 @@ type RecentsListProps = {
   onClearAll: () => void
 }
 
-export function RecentsList({ entries, onOpen, onRemove, onClearAll }: RecentsListProps) {
-  // Map of id → object URL for thumbnail previews (created lazily, revoked on unmount)
-  const [thumbUrls, setThumbUrls] = useState<Record<string, string>>({})
-  const urlsRef = useRef<Record<string, string>>({})
+function RecentThumbnail({ entry }: { entry: RecentEntry }) {
+  const [src] = useState(() => URL.createObjectURL(entry.blob))
 
   useEffect(() => {
-    const next: Record<string, string> = {}
-    for (const entry of entries) {
-      if (urlsRef.current[entry.id]) {
-        next[entry.id] = urlsRef.current[entry.id]
-      } else {
-        next[entry.id] = URL.createObjectURL(entry.blob)
-      }
-    }
-
-    // Revoke URLs that are no longer needed
-    for (const [id, url] of Object.entries(urlsRef.current)) {
-      if (!next[id]) URL.revokeObjectURL(url)
-    }
-
-    urlsRef.current = next
-    setThumbUrls({ ...next })
-
     return () => {
-      for (const url of Object.values(urlsRef.current)) {
-        URL.revokeObjectURL(url)
-      }
-      urlsRef.current = {}
+      URL.revokeObjectURL(src)
     }
-  }, [entries])
+  }, [src])
 
+  return <img src={src} alt={entry.name} className="recent-item__thumb" draggable={false} />
+}
+
+export function RecentsList({ entries, onOpen, onRemove, onClearAll }: RecentsListProps) {
   if (entries.length === 0) return null
 
   return (
@@ -58,21 +40,14 @@ export function RecentsList({ entries, onOpen, onRemove, onClearAll }: RecentsLi
 
       <div className="recents__grid">
         {entries.map((entry) => (
-          <div key={entry.id} className="recent-item" title={entry.name}>
+          <div key={`${entry.id}:${entry.addedAt}`} className="recent-item" title={entry.name}>
             <button
               type="button"
               className="recent-item__thumb-btn"
               onClick={() => onOpen(entry)}
               aria-label={`Open ${entry.name}`}
             >
-              {thumbUrls[entry.id] && (
-                <img
-                  src={thumbUrls[entry.id]}
-                  alt={entry.name}
-                  className="recent-item__thumb"
-                  draggable={false}
-                />
-              )}
+              <RecentThumbnail entry={entry} />
             </button>
 
             <div className="recent-item__info">
