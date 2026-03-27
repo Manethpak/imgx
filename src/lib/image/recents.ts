@@ -1,6 +1,6 @@
 import type { RecentEntry } from '../../types/image'
 
-const DB_NAME = 'image-transform'
+const DB_NAME = 'imgx-recents'
 const DB_VERSION = 1
 const STORE = 'recents'
 const MAX_ENTRIES = 10

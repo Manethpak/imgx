@@ -8,6 +8,7 @@ import { Header } from "./components/Header";
 import { Preview } from "./components/Preview";
 import { Toast } from "./components/Toast";
 import { Toolbar } from "./components/Toolbar";
+import { OgImage } from "./components/og/OgImage";
 import {
   loadImageFromBase64,
   loadImageFromFile,
@@ -32,7 +33,15 @@ import type {
   RecentEntry,
 } from "./types/image";
 
+const isOgMode =
+  typeof window !== "undefined" &&
+  new URLSearchParams(window.location.search).has("og");
+
 function App() {
+  return isOgMode ? <OgImage /> : <EditorApp />;
+}
+
+function EditorApp() {
   const [image, setImage] = useState<ImportedImage | null>(null);
   const [result, setResult] = useState<ProcessedImage | null>(null);
   const [options, setOptions] = useState<EditorOptions>(() =>
@@ -52,7 +61,7 @@ function App() {
   useEffect(() => {
     loadRecents()
       .then(setRecents)
-      .catch(() => {/* IDB unavailable, silently skip */})
+      .catch(() => {/* IDB unavailable, silently skip */ })
   }, []);
 
   // Persist a newly imported image to recents
@@ -114,7 +123,7 @@ function App() {
     try {
       await removeRecent(id);
       setRecents((prev) => prev.filter((e) => e.id !== id));
-    } catch {/* ignore */}
+    } catch {/* ignore */ }
   }, []);
 
   // Clear all recents
@@ -122,7 +131,7 @@ function App() {
     try {
       await clearRecents();
       setRecents([]);
-    } catch {/* ignore */}
+    } catch {/* ignore */ }
   }, []);
 
   // Clipboard paste — works on both screens
