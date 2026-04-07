@@ -49,6 +49,17 @@ export function Toolbar({
     onChange({ ...options, transform: { ...options.transform, rotate: next } })
   }
 
+  function setQuality(value: number) {
+    const next = Math.min(100, Math.max(1, Math.round(value)))
+    setDraftQuality(next)
+  }
+
+  function commitQuality(value: number) {
+    const next = Math.min(100, Math.max(1, Math.round(value)))
+    setDraftQuality(null)
+    onChange({ ...options, output: { ...options.output, quality: next } })
+  }
+
   return (
     <div className="toolbar fade-in">
       {/* Image info */}
@@ -166,13 +177,10 @@ export function Toolbar({
             min="1"
             max="100"
             value={displayQuality}
-            onChange={(e) => setDraftQuality(Number(e.target.value))}
-            onPointerUp={(e) => {
-              const value = Number((e.target as HTMLInputElement).value)
-              setDraftQuality(null)
-              onChange({ ...options, output: { ...options.output, quality: value } })
-            }}
+            onChange={(e) => setQuality(Number(e.target.value))}
+            onMouseUp={(e) => commitQuality(Number((e.target as HTMLInputElement).value))}
             className="toolbar-quality__slider"
+            aria-label="Quality slider"
           />
         </div>
 
