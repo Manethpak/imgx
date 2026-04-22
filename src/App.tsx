@@ -5,6 +5,7 @@ import { DropScreen } from "./components/DropScreen";
 import { ExportDialog } from "./components/ExportDialog";
 import { Footer } from "./components/Footer";
 import { Header } from "./components/Header";
+import { PresetPanel } from "./components/PresetPanel";
 import { Preview } from "./components/Preview";
 import { Toast } from "./components/Toast";
 import { Toolbar } from "./components/Toolbar";
@@ -16,9 +17,11 @@ import {
 } from "./lib/image/load";
 import {
   createDefaultOptions,
+  normalizeOptionsForImage,
   processImage,
   updateOptionsForImage,
 } from "./lib/image/process";
+import { loadPresets as loadSavedPresets, savePresets } from "./lib/image/presets";
 import {
   addRecent,
   buildRecentEntry,
@@ -28,10 +31,20 @@ import {
 } from "./lib/image/recents";
 import type {
   EditorOptions,
+  EditorPreset,
   ImportedImage,
   ProcessedImage,
   RecentEntry,
 } from "./types/image";
+
+type HistoryState = {
+  past: EditorOptions[];
+  future: EditorOptions[];
+};
+
+function areOptionsEqual(a: EditorOptions, b: EditorOptions) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
 
 const isOgMode =
   typeof window !== "undefined" &&
@@ -55,7 +68,73 @@ function EditorApp() {
     null,
   );
   const [colorPanelOpen, setColorPanelOpen] = useState(false);
+  const [presetPanelOpen, setPresetPanelOpen] = useState(false);
   const [recents, setRecents] = useState<RecentEntry[]>([]);
+  const [presets, setPresets] = useState<EditorPreset[]>([]);
+  const [history, setHistory] = useState<HistoryState>({ past: [], future: [] });
+  const [compareMode, setCompareMode] = useState(false);
+
+  const canUndo = history.past.length > 0;
+  const canRedo = history.future.length > 0;
+
+  const commitOptions = useCallback(
+    (
+      nextOrUpdater: EditorOptions | ((current: EditorOptions) => EditorOptions),
+      historyMode: "push" | "replace" = "push",
+    ) => {
+      setOptions((current) => {
+        const rawNext =
+          typeof nextOrUpdater === "function"
+            ? nextOrUpdater(current)
+            : nextOrUpdater;
+        const next = image
+          ? normalizeOptionsForImage(image, rawNext)
+          : rawNext;
+
+        if (areOptionsEqual(current, next)) {
+          return current;
+        }
+
+        if (historyMode === "push") {
+          setHistory((prev) => ({
+            past: [...prev.past, current],
+            future: [],
+          }));
+        }
+
+        return next;
+      });
+    },
+    [image],
+  );
+
+  const undoOptions = useCallback(() => {
+    setHistory((currentHistory) => {
+      const previous = currentHistory.past.at(-1);
+      if (!previous) return currentHistory;
+
+      setOptions((current) => previous);
+
+      return {
+        past: currentHistory.past.slice(0, -1),
+        future: [options, ...currentHistory.future],
+      };
+    });
+  }, [options]);
+
+  const redoOptions = useCallback(() => {
+    setHistory((currentHistory) => {
+      const [next, ...future] = currentHistory.future;
+      if (!next) return currentHistory;
+
+      setOptions((current) => next);
+
+      return {
+        past: [...currentHistory.past, options],
+        future,
+      };
+    });
+  }, [options]);
 
   // Load recents from IndexedDB on mount
   useEffect(() => {
@@ -63,6 +142,14 @@ function EditorApp() {
       .then(setRecents)
       .catch(() => {/* IDB unavailable, silently skip */ })
   }, []);
+
+  useEffect(() => {
+    setPresets(loadSavedPresets());
+  }, []);
+
+  useEffect(() => {
+    savePresets(presets);
+  }, [presets]);
 
   // Persist a newly imported image to recents
   const saveToRecents = useCallback(async (imported: ImportedImage) => {
@@ -85,6 +172,8 @@ function EditorApp() {
         return next;
       });
       setOptions((prev) => updateOptionsForImage(next, prev));
+      setHistory({ past: [], future: [] });
+      setCompareMode(false);
       void saveToRecents(next);
     } catch (err) {
       setToast(
@@ -105,6 +194,8 @@ function EditorApp() {
         return next;
       });
       setOptions((prev) => updateOptionsForImage(next, prev));
+      setHistory({ past: [], future: [] });
+      setCompareMode(false);
       void saveToRecents(next);
     } catch (err) {
       setToast(err instanceof Error ? err.message : "Could not decode base64.");
@@ -217,7 +308,7 @@ function EditorApp() {
 
   // Resize field helper (aspect ratio lock)
   function setResizeField(field: "width" | "height", value: number) {
-    setOptions((cur) => {
+    commitOptions((cur) => {
       const v = Math.max(1, value || 1);
       if (!image || !cur.resize.keepAspectRatio) {
         return { ...cur, resize: { ...cur.resize, [field]: v } };
@@ -234,6 +325,31 @@ function EditorApp() {
     });
   }
 
+  function handleSavePreset() {
+    const name = window.prompt("Preset name", `Preset ${presets.length + 1}`)?.trim();
+    if (!name) return;
+
+    const nextPreset: EditorPreset = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      name,
+      options,
+      createdAt: Date.now(),
+    };
+
+    setPresets((current) => [nextPreset, ...current.filter((preset) => preset.name !== name)]);
+    setToast(`Saved preset “${name}”`);
+  }
+
+  function handleApplyPreset(preset: EditorPreset) {
+    if (!image) return;
+    commitOptions(normalizeOptionsForImage(image, preset.options));
+    setToast(`Applied preset “${preset.name}”`);
+  }
+
+  function handleRemovePreset(id: string) {
+    setPresets((current) => current.filter((preset) => preset.id !== id));
+  }
+
   function clearImage() {
     setImage((c) => {
       if (c) revokeImageUrl(c.url);
@@ -244,9 +360,12 @@ function EditorApp() {
       return null;
     });
     setOptions(createDefaultOptions());
+    setHistory({ past: [], future: [] });
     setShowExport(false);
     setActivePanel(null);
     setColorPanelOpen(false);
+    setPresetPanelOpen(false);
+    setCompareMode(false);
   }
 
   // Derive base name for export
@@ -272,14 +391,21 @@ function EditorApp() {
             <Toolbar
               image={image}
               options={options}
-              onChange={setOptions}
+              presetsCount={presets.length}
+              canUndo={canUndo}
+              canRedo={canRedo}
+              onChange={commitOptions}
               onResizeField={setResizeField}
+              onUndo={undoOptions}
+              onRedo={redoOptions}
               onExport={() => setShowExport(true)}
               onNewImage={clearImage}
               isProcessing={isProcessing}
               activePanel={activePanel}
               onActivePanelChange={setActivePanel}
               colorPanelOpen={colorPanelOpen}
+              presetPanelOpen={presetPanelOpen}
+              onTogglePresetPanel={() => setPresetPanelOpen((v) => !v)}
               onToggleColorPanel={() => setColorPanelOpen((v) => !v)}
             />
             <Preview
@@ -287,16 +413,25 @@ function EditorApp() {
               result={result}
               isProcessing={isProcessing}
               cropActive={activePanel === "crop"}
+              compareMode={compareMode}
+              onCompareModeChange={setCompareMode}
               crop={options.crop}
-              onCropChange={(next) =>
-                setOptions((cur) => ({ ...cur, crop: next }))
-              }
+              onCropChange={(next) => commitOptions((cur) => ({ ...cur, crop: next }))}
             />
             {colorPanelOpen && (
               <ColorPanel
                 color={options.color}
-                onChange={(next) => setOptions((cur) => ({ ...cur, color: next }))}
+                onChange={(next) => commitOptions((cur) => ({ ...cur, color: next }))}
                 onClose={() => setColorPanelOpen(false)}
+              />
+            )}
+            {presetPanelOpen && (
+              <PresetPanel
+                presets={presets}
+                onSave={handleSavePreset}
+                onApply={handleApplyPreset}
+                onRemove={handleRemovePreset}
+                onClose={() => setPresetPanelOpen(false)}
               />
             )}
           </div>

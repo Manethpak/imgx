@@ -1,38 +1,64 @@
-import { useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { EditorOptions, ImportedImage } from '../types/image'
 import { formatBytes } from '../lib/image/load'
 import { DEFAULT_COLOR } from '../lib/image/process'
+import { CropIcon, FlipHorizontalIcon, FlipVerticalIcon, MoveDiagonal, MoveDiagonalIcon, PaletteIcon, Redo2Icon, RotateCcwIcon, SwatchBookIcon, Undo2Icon } from 'lucide-react'
 
 type ActivePanel = 'resize' | 'crop' | null
+
+const CROP_PRESETS = [
+  { label: 'Free', ratio: null },
+  { label: '1:1', ratio: 1 },
+  { label: '4:5', ratio: 4 / 5 },
+  { label: '16:9', ratio: 16 / 9 },
+  { label: '9:16', ratio: 9 / 16 },
+] as const
 
 type ToolbarProps = {
   image: ImportedImage
   options: EditorOptions
+  presetsCount: number
+  canUndo: boolean
+  canRedo: boolean
   onChange: (next: EditorOptions) => void
   onResizeField: (field: 'width' | 'height', value: number) => void
+  onUndo: () => void
+  onRedo: () => void
   onExport: () => void
   onNewImage: () => void
   isProcessing: boolean
   activePanel: ActivePanel
   onActivePanelChange: (panel: ActivePanel) => void
   colorPanelOpen: boolean
+  presetPanelOpen: boolean
+  onTogglePresetPanel: () => void
   onToggleColorPanel: () => void
 }
 
 export function Toolbar({
   image,
   options,
+  presetsCount,
+  canUndo,
+  canRedo,
   onChange,
   onResizeField,
+  onUndo,
+  onRedo,
   onExport,
   onNewImage,
   isProcessing,
   activePanel,
   onActivePanelChange,
   colorPanelOpen,
+  presetPanelOpen,
+  onTogglePresetPanel,
   onToggleColorPanel,
 }: ToolbarProps) {
   const [draftQuality, setDraftQuality] = useState<number | null>(null)
+  const [isQualityPopoverOpen, setIsQualityPopoverOpen] = useState(false)
+  const qualityPopoverId = useId()
+  const qualityPopoverRef = useRef<HTMLDivElement | null>(null)
 
   const displayQuality = draftQuality ?? options.output.quality
 
@@ -60,6 +86,62 @@ export function Toolbar({
     onChange({ ...options, output: { ...options.output, quality: next } })
   }
 
+  function commitDraftQuality() {
+    commitQuality(displayQuality)
+  }
+
+  useEffect(() => {
+    if (!isQualityPopoverOpen) return
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!qualityPopoverRef.current?.contains(event.target as Node)) {
+        setIsQualityPopoverOpen(false)
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setIsQualityPopoverOpen(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    document.addEventListener('keydown', handleEscape)
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [isQualityPopoverOpen])
+
+  function applyCropPreset(ratio: number | null) {
+    if (ratio === null) {
+      onChange({
+        ...options,
+        crop: { x: 0, y: 0, width: image.width, height: image.height },
+      })
+      return
+    }
+
+    let width = image.width
+    let height = Math.round(width / ratio)
+
+    if (height > image.height) {
+      height = image.height
+      width = Math.round(height * ratio)
+    }
+
+    onChange({
+      ...options,
+      crop: {
+        x: Math.round((image.width - width) / 2),
+        y: Math.round((image.height - height) / 2),
+        width,
+        height,
+      },
+    })
+  }
+
   return (
     <div className="toolbar fade-in">
       {/* Image info */}
@@ -72,6 +154,28 @@ export function Toolbar({
 
       {/* Quick actions */}
       <div className="toolbar__actions">
+        <button
+          type="button"
+          className="toolbar-btn"
+          onClick={onUndo}
+          disabled={!canUndo}
+          title="Undo"
+        >
+          <Undo2Icon size={18} />
+        </button>
+
+        <button
+          type="button"
+          className="toolbar-btn"
+          onClick={onRedo}
+          disabled={!canRedo}
+          title="Redo"
+        >
+          <Redo2Icon size={18} />
+        </button>
+
+        <div className="toolbar__sep" />
+
         {/* Rotate */}
         <button
           type="button"
@@ -79,10 +183,7 @@ export function Toolbar({
           onClick={cycleRotation}
           title={`Rotate (${options.transform.rotate}°)`}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="1 4 1 10 7 10" />
-            <path d="M3.51 15a9 9 0 102.13-9.36L1 10" />
-          </svg>
+          <RotateCcwIcon size={18} />
           <span>{options.transform.rotate}°</span>
         </button>
 
@@ -93,11 +194,7 @@ export function Toolbar({
           onClick={() => onChange({ ...options, transform: { ...options.transform, flipHorizontal: !options.transform.flipHorizontal } })}
           title="Flip horizontal"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M8 3H5a2 2 0 00-2 2v14c0 1.1.9 2 2 2h3" />
-            <path d="M16 3h3a2 2 0 012 2v14a2 2 0 01-2 2h-3" />
-            <line x1="12" y1="20" x2="12" y2="4" />
-          </svg>
+          <FlipHorizontalIcon size={18} />
           <span>Flip H</span>
         </button>
 
@@ -108,11 +205,7 @@ export function Toolbar({
           onClick={() => onChange({ ...options, transform: { ...options.transform, flipVertical: !options.transform.flipVertical } })}
           title="Flip vertical"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: 'rotate(90deg)' }}>
-            <path d="M8 3H5a2 2 0 00-2 2v14c0 1.1.9 2 2 2h3" />
-            <path d="M16 3h3a2 2 0 012 2v14a2 2 0 01-2 2h-3" />
-            <line x1="12" y1="20" x2="12" y2="4" />
-          </svg>
+          <FlipVerticalIcon size={18} />
           <span>Flip V</span>
         </button>
 
@@ -124,12 +217,7 @@ export function Toolbar({
           className={`toolbar-btn ${activePanel === 'resize' ? 'toolbar-btn--active' : ''}`}
           onClick={() => togglePanel('resize')}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="15 3 21 3 21 9" />
-            <polyline points="9 21 3 21 3 15" />
-            <line x1="21" y1="3" x2="14" y2="10" />
-            <line x1="3" y1="21" x2="10" y2="14" />
-          </svg>
+          <MoveDiagonalIcon size={18} />
           <span>Resize</span>
         </button>
 
@@ -139,14 +227,10 @@ export function Toolbar({
           className={`toolbar-btn ${activePanel === 'crop' ? 'toolbar-btn--active' : ''}`}
           onClick={() => togglePanel('crop')}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M6.13 1L6 16a2 2 0 002 2h15" />
-            <path d="M1 6.13L16 6a2 2 0 012 2v15" />
-          </svg>
+          <CropIcon size={18} />
           <span>Crop</span>
         </button>
 
-        {/* Colors — opens floating panel */}
         <button
           type="button"
           className={`toolbar-btn ${colorPanelOpen || colorActive ? 'toolbar-btn--active' : ''}`}
@@ -154,12 +238,7 @@ export function Toolbar({
           title="Color adjustments"
         >
           {/* palette icon */}
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="13.5" cy="6.5" r="2.5" />
-            <circle cx="19" cy="13" r="2.5" />
-            <circle cx="6.5" cy="15.5" r="2.5" />
-            <path d="M17.5 8.5c-2 3.5-5.5 5.5-11 6" />
-          </svg>
+          <PaletteIcon size={18} />
           <span>Colors</span>
           {colorActive && <span className="toolbar-btn__dot" />}
         </button>
@@ -167,22 +246,52 @@ export function Toolbar({
         <div className="toolbar__sep" />
 
         {/* Quality */}
-        <div className="toolbar-quality">
-          <label className="toolbar-quality__label">
-            Quality
+        <div className="toolbar-quality" ref={qualityPopoverRef}>
+          <button
+            type="button"
+            className={`toolbar-btn ${isQualityPopoverOpen ? 'toolbar-btn--active' : ''}`}
+            onClick={() => setIsQualityPopoverOpen((open) => !open)}
+            aria-haspopup="dialog"
+            aria-expanded={isQualityPopoverOpen}
+            aria-controls={qualityPopoverId}
+            title="Adjust quality"
+          >
+            <span>Quality</span>
             <span className="toolbar-quality__value">{displayQuality}%</span>
-          </label>
-          <input
-            type="range"
-            min="1"
-            max="100"
-            value={displayQuality}
-            onChange={(e) => setQuality(Number(e.target.value))}
-            onMouseUp={(e) => commitQuality(Number((e.target as HTMLInputElement).value))}
-            className="toolbar-quality__slider"
-            aria-label="Quality slider"
-          />
+          </button>
+
+          {isQualityPopoverOpen && (
+            <div className="toolbar-quality__popover" id={qualityPopoverId} role="dialog" aria-label="Quality controls">
+              <input
+                id="quality-slider"
+                type="range"
+                min="1"
+                max="100"
+                value={displayQuality}
+                onChange={(e) => setQuality(Number(e.target.value))}
+                onPointerUp={commitDraftQuality}
+                onKeyUp={commitDraftQuality}
+                onBlur={commitDraftQuality}
+                className="toolbar-quality__slider"
+                aria-label="Quality slider"
+              />
+            </div>
+          )}
         </div>
+
+        <div className="toolbar__sep" />
+
+        {/* Preset — opens floating panel */}
+        <button
+          type="button"
+          className={`toolbar-btn ${presetPanelOpen ? 'toolbar-btn--active' : ''}`}
+          onClick={onTogglePresetPanel}
+          title="Saved presets"
+        >
+          <SwatchBookIcon size={18} />
+          <span>Presets</span>
+          {presetsCount > 0 && <span className="toolbar-btn__dot" />}
+        </button>
 
         <div className="toolbar__sep" />
 
@@ -192,7 +301,7 @@ export function Toolbar({
         </button>
 
         <button type="button" className="btn btn--ghost btn--sm" onClick={onNewImage}>
-          New
+          Clear
         </button>
       </div>
 
@@ -229,12 +338,62 @@ export function Toolbar({
             <span>Lock aspect ratio</span>
           </label>
 
+          <label className="field-select">
+            <span>Fit</span>
+            <select
+              value={options.canvas.fit}
+              onChange={(e) => onChange({
+                ...options,
+                canvas: {
+                  ...options.canvas,
+                  fit: e.target.value as EditorOptions['canvas']['fit'],
+                },
+              })}
+            >
+              <option value="cover">Cover</option>
+              <option value="contain">Contain</option>
+            </select>
+          </label>
+
+          <label className="toggle-inline">
+            <input
+              type="checkbox"
+              checked={options.canvas.background === 'transparent'}
+              onChange={(e) => onChange({
+                ...options,
+                canvas: {
+                  ...options.canvas,
+                  background: e.target.checked
+                    ? 'transparent'
+                    : options.canvas.background === 'transparent'
+                      ? '#f5f6ef'
+                      : options.canvas.background,
+                },
+              })}
+            />
+            <span>Transparent bg</span>
+          </label>
+
+          <label className="field-color">
+            <span>Fill</span>
+            <input
+              type="color"
+              value={options.canvas.background === 'transparent' ? '#f5f6ef' : options.canvas.background}
+              disabled={options.canvas.background === 'transparent'}
+              onChange={(e) => onChange({
+                ...options,
+                canvas: { ...options.canvas, background: e.target.value },
+              })}
+            />
+          </label>
+
           <button
             type="button"
             className="btn btn--ghost btn--xs"
             onClick={() => onChange({
               ...options,
               resize: { width: image.width, height: image.height, keepAspectRatio: true },
+              canvas: { ...options.canvas, fit: 'cover' },
             })}
             title="Reset resize to original dimensions"
           >
@@ -246,6 +405,18 @@ export function Toolbar({
       {activePanel === 'crop' && (
         <div className="toolbar-panel slide-down">
           <span className="toolbar-panel__hint">Drag handles on the preview to set the crop region.</span>
+          <div className="toolbar-panel__chips">
+            {CROP_PRESETS.map((preset) => (
+              <button
+                key={preset.label}
+                type="button"
+                className="toolbar-chip"
+                onClick={() => applyCropPreset(preset.ratio)}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
           <button
             type="button"
             className="btn btn--ghost btn--xs"

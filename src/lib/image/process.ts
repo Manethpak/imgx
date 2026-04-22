@@ -1,5 +1,9 @@
 import type { ColorOptions, EditorOptions, ImportedImage, ProcessedImage, SupportedMimeType } from '../../types/image'
 
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value))
+}
+
 function loadHtmlImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image()
@@ -38,11 +42,22 @@ function getResizeDimensions(sourceWidth: number, sourceHeight: number, options:
 }
 
 function getCropRect(sourceWidth: number, sourceHeight: number, options: EditorOptions['crop']) {
-  const x = Math.min(Math.max(0, Math.round(options.x)), sourceWidth - 1)
-  const y = Math.min(Math.max(0, Math.round(options.y)), sourceHeight - 1)
+  const x = clamp(Math.round(options.x), 0, sourceWidth - 1)
+  const y = clamp(Math.round(options.y), 0, sourceHeight - 1)
   const width = Math.min(Math.max(1, Math.round(options.width)), sourceWidth - x)
   const height = Math.min(Math.max(1, Math.round(options.height)), sourceHeight - y)
   return { x, y, width, height }
+}
+
+function getContainDimensions(sourceWidth: number, sourceHeight: number, targetWidth: number, targetHeight: number) {
+  const width = Math.max(1, Math.round(targetWidth))
+  const height = Math.max(1, Math.round(targetHeight))
+  const scale = Math.min(width / sourceWidth, height / sourceHeight)
+
+  return {
+    width: Math.max(1, Math.round(sourceWidth * scale)),
+    height: Math.max(1, Math.round(sourceHeight * scale)),
+  }
 }
 
 function createCanvas(width: number, height: number) {
@@ -251,17 +266,28 @@ function applyPixelEffects(canvas: HTMLCanvasElement, c: ColorOptions) {
 export async function processImage(source: ImportedImage, options: EditorOptions): Promise<ProcessedImage> {
   const image = await loadHtmlImage(source.url)
   const crop = getCropRect(source.width, source.height, options.crop)
-  const resize = getResizeDimensions(crop.width, crop.height, options.resize)
+  const coverResize = getResizeDimensions(crop.width, crop.height, options.resize)
+  const resize = options.canvas.fit === 'contain'
+    ? getContainDimensions(crop.width, crop.height, options.resize.width, options.resize.height)
+    : coverResize
   const rotateQuarterTurns = options.transform.rotate === 90 || options.transform.rotate === 270
-  const outputWidth = rotateQuarterTurns ? resize.height : resize.width
-  const outputHeight = rotateQuarterTurns ? resize.width : resize.height
+  const canvasWidth = options.canvas.fit === 'contain'
+    ? Math.max(1, Math.round(options.resize.width))
+    : coverResize.width
+  const canvasHeight = options.canvas.fit === 'contain'
+    ? Math.max(1, Math.round(options.resize.height))
+    : coverResize.height
+  const outputWidth = rotateQuarterTurns ? canvasHeight : canvasWidth
+  const outputHeight = rotateQuarterTurns ? canvasWidth : canvasHeight
   const workingCanvas = createCanvas(outputWidth, outputHeight)
   const ctx = workingCanvas.getContext('2d')
 
   if (!ctx) throw new Error('Could not create a canvas context.')
 
-  if (options.output.format === 'image/jpeg') {
-    ctx.fillStyle = '#ffffff'
+  if (options.output.format === 'image/jpeg' || options.canvas.background !== 'transparent') {
+    ctx.fillStyle = options.output.format === 'image/jpeg' && options.canvas.background === 'transparent'
+      ? '#ffffff'
+      : options.canvas.background
     ctx.fillRect(0, 0, outputWidth, outputHeight)
   }
 
@@ -320,6 +346,10 @@ export function createDefaultOptions(image?: ImportedImage): EditorOptions {
       flipHorizontal: false,
       flipVertical: false,
     },
+    canvas: {
+      fit: 'cover',
+      background: 'transparent',
+    },
     color: {
       brightness: 0,
       contrast: 0,
@@ -363,6 +393,22 @@ export function updateOptionsForImage(image: ImportedImage, current?: EditorOpti
     output: {
       ...current.output,
       format: image.type,
+    },
+  }
+}
+
+export function normalizeOptionsForImage(image: ImportedImage, options: EditorOptions): EditorOptions {
+  return {
+    ...options,
+    resize: {
+      ...options.resize,
+      width: Math.max(1, Math.round(options.resize.width)),
+      height: Math.max(1, Math.round(options.resize.height)),
+    },
+    crop: getCropRect(image.width, image.height, options.crop),
+    output: {
+      ...options.output,
+      quality: clamp(Math.round(options.output.quality), 1, 100),
     },
   }
 }

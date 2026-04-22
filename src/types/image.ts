@@ -64,6 +64,11 @@ export type TransformOptions = {
   flipVertical: boolean
 }
 
+export type CanvasOptions = {
+  fit: 'cover' | 'contain'
+  background: string
+}
+
 export type ColorOptions = {
   // ctx.filter-based adjustments
   brightness: number      // -100 to 100  (0 = neutral)
@@ -93,6 +98,14 @@ export type EditorOptions = {
   resize: ResizeOptions
   crop: CropOptions
   transform: TransformOptions
+  canvas: CanvasOptions
   color: ColorOptions
   output: OutputOptions
+}
+
+export type EditorPreset = {
+  id: string
+  name: string
+  options: EditorOptions
+  createdAt: number
 }
