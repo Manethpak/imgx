@@ -113,7 +113,7 @@ function EditorApp() {
       const previous = currentHistory.past.at(-1);
       if (!previous) return currentHistory;
 
-      setOptions((current) => previous);
+      setOptions(previous);
 
       return {
         past: currentHistory.past.slice(0, -1),
@@ -127,7 +127,7 @@ function EditorApp() {
       const [next, ...future] = currentHistory.future;
       if (!next) return currentHistory;
 
-      setOptions((current) => next);
+      setOptions(next);
 
       return {
         past: [...currentHistory.past, options],

@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import type { EditorOptions, ImportedImage } from '../types/image'
 import { formatBytes } from '../lib/image/load'
 import { DEFAULT_COLOR } from '../lib/image/process'
-import { CropIcon, FlipHorizontalIcon, FlipVerticalIcon, MoveDiagonal, MoveDiagonalIcon, PaletteIcon, Redo2Icon, RotateCcwIcon, SwatchBookIcon, Undo2Icon } from 'lucide-react'
+import { CropIcon, FlipHorizontalIcon, FlipVerticalIcon, MoveDiagonalIcon, PaletteIcon, Redo2Icon, RotateCcwIcon, SwatchBookIcon, Undo2Icon } from 'lucide-react'
 
 type ActivePanel = 'resize' | 'crop' | null
 
