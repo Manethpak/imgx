@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ExportFormat, ProcessedImage } from "../types/image";
 import { exportFormats } from "../types/image";
 import {
+  copyBlobImage,
   copyBlobBase64,
   downloadBlob,
   formatExtension,
@@ -75,6 +76,21 @@ export function ExportDialog({
       onToast("Base64 copied to clipboard");
     } catch {
       onToast("Copy failed");
+    } finally {
+      setIsEncoding(false);
+    }
+  }
+
+  async function handleCopyImage() {
+    setIsEncoding(true);
+    try {
+      const blob = selectedFormat === "image/png"
+        ? await getBlob()
+        : await reEncodeAs(result, "image/png", quality);
+      await copyBlobImage(blob);
+      onToast("Image copied to clipboard");
+    } catch {
+      onToast("Image copy failed");
     } finally {
       setIsEncoding(false);
     }
@@ -165,6 +181,28 @@ export function ExportDialog({
               <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
             Download .{formatExtension(selectedFormat)}
+          </button>
+
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={() => void handleCopyImage()}
+            disabled={isEncoding}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+            </svg>
+            Copy image
           </button>
 
           <button

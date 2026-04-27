@@ -72,7 +72,6 @@ function EditorApp() {
   const [recents, setRecents] = useState<RecentEntry[]>([]);
   const [presets, setPresets] = useState<EditorPreset[]>([]);
   const [history, setHistory] = useState<HistoryState>({ past: [], future: [] });
-  const [compareMode, setCompareMode] = useState(false);
 
   const canUndo = history.past.length > 0;
   const canRedo = history.future.length > 0;
@@ -173,7 +172,6 @@ function EditorApp() {
       });
       setOptions((prev) => updateOptionsForImage(next, prev));
       setHistory({ past: [], future: [] });
-      setCompareMode(false);
       void saveToRecents(next);
     } catch (err) {
       setToast(
@@ -195,7 +193,6 @@ function EditorApp() {
       });
       setOptions((prev) => updateOptionsForImage(next, prev));
       setHistory({ past: [], future: [] });
-      setCompareMode(false);
       void saveToRecents(next);
     } catch (err) {
       setToast(err instanceof Error ? err.message : "Could not decode base64.");
@@ -365,7 +362,6 @@ function EditorApp() {
     setActivePanel(null);
     setColorPanelOpen(false);
     setPresetPanelOpen(false);
-    setCompareMode(false);
   }
 
   // Derive base name for export
@@ -413,8 +409,6 @@ function EditorApp() {
               result={result}
               isProcessing={isProcessing}
               cropActive={activePanel === "crop"}
-              compareMode={compareMode}
-              onCompareModeChange={setCompareMode}
               crop={options.crop}
               onCropChange={(next) => commitOptions((cur) => ({ ...cur, crop: next }))}
             />

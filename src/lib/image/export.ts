@@ -157,6 +157,18 @@ export async function copyBase64ToClipboard(image: ProcessedImage) {
   return copyBlobBase64(image.blob)
 }
 
+export async function copyBlobImage(blob: Blob): Promise<void> {
+  if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') {
+    throw new Error('Image clipboard is not available in this browser.')
+  }
+
+  await navigator.clipboard.write([
+    new ClipboardItem({
+      [blob.type]: blob,
+    }),
+  ])
+}
+
 // ── Format helpers ──────────────────────────────────────────────────────
 
 export function formatExtension(format: ExportFormat): string {
