@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import "./App.css";
 import { ColorPanel } from "./components/ColorPanel";
 import { DropScreen } from "./components/DropScreen";
@@ -72,9 +72,14 @@ function EditorApp() {
   const [recents, setRecents] = useState<RecentEntry[]>([]);
   const [presets, setPresets] = useState<EditorPreset[]>([]);
   const [history, setHistory] = useState<HistoryState>({ past: [], future: [] });
+  const imageRef = useRef<ImportedImage | null>(null);
 
   const canUndo = history.past.length > 0;
   const canRedo = history.future.length > 0;
+
+  useEffect(() => {
+    imageRef.current = image;
+  }, [image]);
 
   const commitOptions = useCallback(
     (
@@ -166,12 +171,17 @@ function EditorApp() {
     setIsImporting(true);
     try {
       const next = await loadImageFromFile(file);
+      const hadImage = Boolean(imageRef.current);
       setImage((prev) => {
         if (prev) revokeImageUrl(prev.url);
         return next;
       });
       setOptions((prev) => updateOptionsForImage(next, prev));
       setHistory({ past: [], future: [] });
+      setShowExport(false);
+      if (!hadImage) {
+        window.history.pushState({ imgxView: "editor" }, "", "#editor");
+      }
       void saveToRecents(next);
     } catch (err) {
       setToast(
@@ -187,12 +197,17 @@ function EditorApp() {
     setIsImporting(true);
     try {
       const next = await loadImageFromBase64(raw);
+      const hadImage = Boolean(imageRef.current);
       setImage((prev) => {
         if (prev) revokeImageUrl(prev.url);
         return next;
       });
       setOptions((prev) => updateOptionsForImage(next, prev));
       setHistory({ past: [], future: [] });
+      setShowExport(false);
+      if (!hadImage) {
+        window.history.pushState({ imgxView: "editor" }, "", "#editor");
+      }
       void saveToRecents(next);
     } catch (err) {
       setToast(err instanceof Error ? err.message : "Could not decode base64.");
@@ -347,7 +362,7 @@ function EditorApp() {
     setPresets((current) => current.filter((preset) => preset.id !== id));
   }
 
-  function clearImage() {
+  const clearImage = useCallback((syncUrl = true) => {
     setImage((c) => {
       if (c) revokeImageUrl(c.url);
       return null;
@@ -362,7 +377,26 @@ function EditorApp() {
     setActivePanel(null);
     setColorPanelOpen(false);
     setPresetPanelOpen(false);
-  }
+
+    if (syncUrl && window.location.hash === "#editor") {
+      window.history.replaceState(
+        null,
+        "",
+        window.location.pathname + window.location.search,
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    function handlePopState() {
+      if (imageRef.current) {
+        clearImage(false);
+      }
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [clearImage]);
 
   // Derive base name for export
   const baseName = image?.file.name.replace(/\.[^.]+$/, "") ?? "image";
@@ -394,7 +428,7 @@ function EditorApp() {
               onResizeField={setResizeField}
               onUndo={undoOptions}
               onRedo={redoOptions}
-              onExport={() => setShowExport(true)}
+              onExport={() => setShowExport((open) => !open)}
               onNewImage={clearImage}
               isProcessing={isProcessing}
               activePanel={activePanel}
